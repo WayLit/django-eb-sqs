@@ -76,6 +76,6 @@ class task:  # noqa: N801
         self.max_retries = max_retries
 
     def __call__(self, func: Callable[PS, Any], *args: Any, **kwargs: Any) -> Any:
-        func.retry_num = 0
-        func.delay = func_delay_decorator(func, self.queue_name, self.max_retries)
+        func.retry_num = 0  # type: ignore [attr-defined]
+        func.delay = func_delay_decorator(func, self.queue_name, self.max_retries)  # type: ignore [attr-defined]
         return func

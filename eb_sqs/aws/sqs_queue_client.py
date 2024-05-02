@@ -1,4 +1,6 @@
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import boto3
 from botocore.config import Config
@@ -11,15 +13,19 @@ from eb_sqs.worker.queue_client import (
     QueueDoesNotExistException,
 )
 
+if TYPE_CHECKING:
+    from mypy_boto3_sqs import SQSServiceResource
+    from mypy_boto3_sqs.service_resource import Queue
+
 
 class SqsQueueClient(QueueClient):
     def __init__(self) -> None:
-        self.sqs = boto3.resource(
+        self.sqs: SQSServiceResource = boto3.resource(  # pyright: ignore
             "sqs",
             region_name=settings.AWS_REGION,
             config=Config(retries={"max_attempts": settings.AWS_MAX_RETRIES}),
         )
-        self.queue_cache = {}
+        self.queue_cache: dict[str, Queue] = {}
 
     def _get_queue(self, queue_name: str, use_cache: bool = True) -> Any:
         full_queue_name = f"{settings.QUEUE_PREFIX}{queue_name}"

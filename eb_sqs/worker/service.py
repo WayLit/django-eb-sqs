@@ -1,13 +1,14 @@
+from __future__ import annotations
+
 import logging
 import signal
-from datetime import timedelta
+from datetime import datetime, timedelta
 from functools import partial
 from time import sleep
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import boto3
 import django.dispatch
-from boto3.resources.base import ServiceResource
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from django.utils import timezone
@@ -18,6 +19,10 @@ from eb_sqs.worker.worker import Worker
 from eb_sqs.worker.worker_exceptions import ExecutionFailedException
 from eb_sqs.worker.worker_factory import WorkerFactory
 
+if TYPE_CHECKING:
+    from mypy_boto3_sqs import SQSServiceResource
+    from mypy_boto3_sqs.service_resource import Message, Queue
+
 logger = logging.getLogger(__name__)
 
 MESSAGES_RECEIVED = django.dispatch.Signal()
@@ -27,11 +32,13 @@ MESSAGES_DELETED = django.dispatch.Signal()
 
 class WorkerService:
     _PREFIX_STR = "prefix:"
-    _RECEIVE_COUNT_ATTRIBUTE = "ApproximateReceiveCount"
+    _RECEIVE_COUNT_ATTRIBUTE: Literal["ApproximateReceiveCount"] = (
+        "ApproximateReceiveCount"
+    )
 
     def __init__(self) -> None:
         self._exit_gracefully = False
-        self._last_healthcheck_time = None
+        self._last_healthcheck_time: datetime | None = None
 
     def process_queues(self, queue_names: list) -> None:
         signal.signal(signal.SIGTERM, self._exit_called)
@@ -41,7 +48,7 @@ class WorkerService:
 
         logger.debug("[django-eb-sqs] Connecting to SQS: %s", ", ".join(queue_names))
 
-        sqs = boto3.resource(
+        sqs: SQSServiceResource = boto3.resource(  # pyright: ignore
             "sqs",
             region_name=settings.AWS_REGION,
             config=Config(retries={"max_attempts": settings.AWS_MAX_RETRIES}),
@@ -153,7 +160,7 @@ class WorkerService:
                     exc_info=True,
                 )
 
-            if not self._last_healthcheck_time or (
+            if (self._last_healthcheck_time is None) or (
                 timezone.now()
                 - timedelta(seconds=settings.MIN_HEALTHCHECK_WRITE_PERIOD_S)
                 > self._last_healthcheck_time
@@ -161,7 +168,7 @@ class WorkerService:
                 self.write_healthcheck_file()
                 self._last_healthcheck_time = timezone.now()
 
-    def delete_messages(self, queue, msg_entries: list) -> None:
+    def delete_messages(self, queue: Queue, msg_entries: list) -> None:
         if len(msg_entries) > 0:
             response = queue.delete_messages(Entries=msg_entries)
 
@@ -175,7 +182,7 @@ class WorkerService:
                     failed,
                 )
 
-    def poll_messages(self, queue) -> list:
+    def poll_messages(self, queue: Queue) -> list[Message]:
         return queue.receive_messages(
             MaxNumberOfMessages=settings.MAX_NUMBER_OF_MESSAGES,
             WaitTimeSeconds=settings.WAIT_TIME_S,
@@ -183,14 +190,14 @@ class WorkerService:
         )
 
     def _send_signal(
-        self, dispatch_signal: django.dispatch.Signal, messages: list
+        self, dispatch_signal: django.dispatch.Signal, messages: list[Message]
     ) -> None:
         if dispatch_signal.has_listeners(sender=self.__class__):
             self._execute_user_code(
                 lambda: dispatch_signal.send(sender=self.__class__, messages=messages)
             )
 
-    def _process_message(self, msg, worker: Worker) -> None:
+    def _process_message(self, msg: Message, worker: Worker) -> None:
         logger.debug("[django-eb-sqs] Read message %s", msg.message_id)
         try:
             receive_count = int(msg.attributes[self._RECEIVE_COUNT_ATTRIBUTE])
@@ -218,13 +225,17 @@ class WorkerService:
         except Exception as exc:
             logger.exception("[django-eb-sqs] Unhandled error: %s", exc)
 
-    def get_queues_by_names(self, sqs: ServiceResource, queue_names: list) -> list:
+    def get_queues_by_names(
+        self, sqs: SQSServiceResource, queue_names: list
+    ) -> list[Queue]:
         return [
             sqs.get_queue_by_name(QueueName=queue_name) for queue_name in queue_names
         ]
 
-    def get_queues_by_prefixes(self, sqs: ServiceResource, prefixes: list) -> list:
-        queues = []
+    def get_queues_by_prefixes(
+        self, sqs: SQSServiceResource, prefixes: list
+    ) -> list[Queue]:
+        queues: list[Queue] = []
 
         for prefix in prefixes:
             queues += sqs.queues.filter(QueueNamePrefix=prefix)
@@ -235,6 +246,6 @@ class WorkerService:
         with open(settings.HEALTHCHECK_FILE_NAME, "w") as file:
             file.write(timezone.now().isoformat())
 
-    def _exit_called(self, signum, frame) -> None:
+    def _exit_called(self, signum: int, frame: Any) -> None:
         logger.info("[django-eb-sqs] Termination signal called: %s", signum)
         self._exit_gracefully = True
