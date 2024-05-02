@@ -1,0 +1,227 @@
+[project]
+name = "django-eb-sqs"
+dynamic = ["version"]
+description = 'A simple task manager for AWS SQS'
+dependencies = ["django>=4.2", "boto3", "requests", "typing_extensions"]
+requires-python = ">=3.8"
+readme = "README.md"
+classifiers = [
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3.9",
+  "Topic :: Software Development",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Framework :: Django",
+]
+
+[project.optional-dependencies]
+dev = ["mypy-boto3-sqs", "moto"]
+
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.pyright]
+# See https://github.com/microsoft/pyright/blob/main/docs/configuration.md#sample-pyprojecttoml-file
+venvPath = "."
+venv = ".venv"
+exclude = ["**/node_modules", "**/__pycache__", ".git", "typings", ".venv"]
+stubPath = "typings"
+pythonVersion = "3.8"
+
+
+[tool.mypy]
+python_version = "3.8"
+check_untyped_defs = true
+# We don't have stubs for all libraries
+ignore_missing_imports = true
+# We need some ignores for Pylance
+follow_imports = "normal"
+exclude = '''(?x)(
+    ^typings/    # crashes
+    )'''
+ignore_errors = false
+show_error_codes = true
+pretty = true
+# Strictness
+allow_redefinition = false
+implicit_reexport = true
+local_partial_types = true
+no_implicit_optional = true
+strict_equality = true
+strict_optional = true
+# Warnings
+warn_no_return = true
+warn_redundant_casts = true
+warn_unreachable = true
+warn_unused_configs = true
+warn_unused_ignores = true
+
+
+[tool.coverage.report]
+exclude_lines = [
+  # Have to re-enable the standard pragma
+  'pragma: no cover',
+
+  # Don't complain about missing debug-only code:
+  'def __repr__',
+  'if settings.DEBUG',
+
+  # Don't complain if tests don't hit defensive assertion code:
+  'raise AssertionError',
+  'raise NotImplementedError',
+
+  # Don't complain if non-runnable code isn't run:
+  'if 0:',
+  'if __name__ == .__main__.:',
+
+  # Don't complain about abstract methods, they aren't run:
+  '@(abc\.)?abstractmethod',
+
+  # Don't complain about type imports
+  'if TYPE_CHECKING:',
+]
+
+[tool.coverage.run]
+# include = main/* cases/* positions/* company/*
+omit = [
+  "*/migrations/*",
+  "*/conftest.py",
+  "*/tests/*",
+  "*.html",
+  "*.txt",
+  "*/__init__.py",
+  "*/management/commands/*.py",
+  "*/types.py",
+  "*/exceptions.py",
+]
+# To check templates
+# plugins = [ 'django_coverage_plugin' ]
+relative_files = true
+data_file = "logs/coverage"
+
+[tool.coverage.django_coverage_plugin]
+template_extensions = "html, txt, tex, email"
+
+
+[tool.ruff]
+extend-exclude = [ # same as flakeheaven
+  "**/migrations/*.py",
+  ".tox",
+  ".git",
+  "**/__pycache__",
+  "docs",
+  "node_modules",
+  "typings",
+]
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+  "I",
+  "F",
+  "E",
+  "C",
+  "N",
+  "D",
+  "UP",
+  "YTT",
+  "ANN",
+  "B",
+  "S",
+  "A",
+  "C4",
+  "DTZ",
+  "DJ",
+  "EM",
+  "FA",
+  "G",
+  "PIE",
+  "T20",
+  "SIM",
+  "TID",
+  "INT",
+  "ERA",
+  "PERF",
+  "LOG",
+  "RUF",
+  "ISC",
+  # "FBT001",
+  "FA",
+  "ASYNC",
+  "BLE",
+  "ICN",
+  "INP",
+  "SLOT",
+  # "TCH",
+  "FURB",
+]
+
+ignore = [
+  "D10",
+  "D202",
+  "D203",
+  "D211",
+  "D213",
+  "D400",
+  "D415",
+  "E501",
+  "Q",
+  "ANN101",
+  "ANN102",
+  "ANN002",
+  "ANN003",
+  "DJ001",
+  "RUF001", # we use unicode
+  "RUF002", # we use unicode
+  "RUF012",
+  "EM101",
+  "EM102",
+  "PT009",
+  "PT023",
+  "PT001",
+  "UP040",  # mypy doesn't support the type keyword for type alieases yet
+  "UP030",  # don't agree with this rule
+  "ANN401",
+  "ISC001",
+]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
+# Allow unused variables when underscore-prefixed.
+suppress-dummy-args = true
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*.py" = [
+  "S101",
+  "S105",
+  "S106",
+  "S311",
+  "T201",
+  "ANN201",
+  "ANN202",
+  "ANN206",
+]
+"**/conftest.py" = ["S101", "S105", "S106", "S311", "T201", "ANN201", "ANN206"]
+
+"config/settings/local.py" = ["F405"]
+"rules/*.py" = ["N802"]
+"bin/*.py" = ["T201", "INP"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+filterwarnings = [
+  "ignore::DeprecationWarning:botocore.auth:419",
+  "ignore::django.utils.deprecation.RemovedInDjango51Warning:django.conf:166",
+  "ignore::django.utils.deprecation.RemovedInDjango51Warning:django.core.files.storage:32",
+]
+markers = ["""slow: marks tests as slow (deselect with '-m "not slow"')"""]
+addopts = """--ds=eb_sqs.test_settings"""
+playwright_enabled = false
+python_files = ["tests.py", "*/tests/test_*.py"]
+python_classes = "Test*"
