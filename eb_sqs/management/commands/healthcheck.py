@@ -1,6 +1,7 @@
-import sys
+from __future__ import annotations
 
 import logging
+import sys
 from datetime import timedelta
 
 from django.core.management import BaseCommand
@@ -13,22 +14,23 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Checks the SQS worker is healthy, and if not returns a failure code'
+    help = "Checks the SQS worker is healthy, and if not returns a failure code"
 
-    def add_arguments(self, parser):
-        pass
-
-    def handle(self, *args, **options):
+    def handle(self, *args, **options) -> None:
         try:
-            with open(settings.HEALTHCHECK_FILE_NAME, 'r') as file:
-                last_healthcheck_date_str = file.readlines()[0]
+            with open(settings.HEALTHCHECK_FILE_NAME) as file:
+                last_healthcheck_date = parse_datetime(file.readlines()[0])
 
-                if parse_datetime(last_healthcheck_date_str) < timezone.now() - timedelta(seconds=settings.HEALTHCHECK_UNHEALTHY_PERIOD_S):
+                if (
+                    not last_healthcheck_date
+                ) or last_healthcheck_date < timezone.now() - timedelta(
+                    seconds=settings.HEALTHCHECK_UNHEALTHY_PERIOD_S
+                ):
                     self._return_failure()
-        except Exception:
+        except Exception:  # noqa: BLE001
             self._return_failure()
 
     @staticmethod
-    def _return_failure():
-        logger.warning('[django-eb-sqs] Health check failed')
+    def _return_failure() -> None:
+        logger.warning("[django-eb-sqs] Health check failed")
         sys.exit(1)

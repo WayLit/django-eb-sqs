@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import base64
 import importlib
 import json
@@ -6,15 +8,21 @@ from typing import Any
 
 from eb_sqs import settings
 
-try:
-    import cPickle as pickle
-except Exception:
-    import pickle
 
-
-class WorkerTask(object):
-    def __init__(self, id: str, group_id: str, queue: str, func: Any, args: tuple, kwargs: dict, max_retries: int, retry: int, retry_id: str, use_pickle: bool):
-        super(WorkerTask, self).__init__()
+class WorkerTask:
+    def __init__(
+        self,
+        id: str,  # noqa: A002
+        group_id: str | None,
+        queue: str,
+        func: Any,
+        args: tuple,
+        kwargs: dict,
+        max_retries: int,
+        retry: int,
+        retry_id: str | None,
+    ) -> None:
+        super().__init__()
         self.id = id
         self.group_id = group_id
         self.queue = queue
@@ -24,36 +32,35 @@ class WorkerTask(object):
         self.max_retries = max_retries
         self.retry = retry
         self.retry_id = retry_id
-        self.use_pickle = use_pickle
 
-        self.abs_func_name = '{}.{}'.format(self.func.__module__, self.func.__name__)
+        self.abs_func_name = f"{self.func.__module__}.{self.func.__name__}"
 
     def execute(self) -> Any:
         from eb_sqs.decorators import func_retry_decorator
+
         self.func.retry_num = self.retry
         self.func.retry = func_retry_decorator(worker_task=self)
         return self.func(*self.args, **self.kwargs)
 
     def serialize(self) -> str:
-        args = WorkerTask._pickle_args(self.args) if self.use_pickle else self.args
-        kwargs = WorkerTask._pickle_args(self.kwargs) if self.use_pickle else self.kwargs
+        args = self.args
+        kwargs = self.kwargs
 
         task = {
-            'id': self.id,
-            'groupId': self.group_id,
-            'queue': self.queue,
-            'func': self.abs_func_name,
-            'args': args,
-            'kwargs': kwargs,
-            'maxRetries': self.max_retries,
-            'retry': self.retry,
-            'retryId': self.retry_id,
-            'pickle': self.use_pickle,
+            "id": self.id,
+            "groupId": self.group_id,
+            "queue": self.queue,
+            "func": self.abs_func_name,
+            "args": args,
+            "kwargs": kwargs,
+            "maxRetries": self.max_retries,
+            "retry": self.retry,
+            "retryId": self.retry_id,
         }
 
         return json.dumps(task)
 
-    def copy(self, use_serialization: bool):
+    def copy(self, use_serialization: bool) -> WorkerTask:
         if use_serialization:
             return WorkerTask.deserialize(self.serialize())
         else:
@@ -67,41 +74,41 @@ class WorkerTask(object):
                 self.max_retries,
                 self.retry,
                 self.retry_id,
-                self.use_pickle,
             )
 
     @staticmethod
-    def _pickle_args(args: Any) -> str:
-        return base64.b64encode(pickle.dumps(args, pickle.HIGHEST_PROTOCOL)).decode('utf-8')
-
-    @staticmethod
-    def deserialize(msg: str):
+    def deserialize(msg: str) -> WorkerTask:
         task = json.loads(msg)
 
-        id = task.get('id', str(uuid.uuid4()))
-        group_id = task.get('groupId')
+        id = task.get("id", str(uuid.uuid4()))  # noqa: A001
+        group_id = task.get("groupId")
 
-        abs_func_name = task['func']
+        abs_func_name = task["func"]
         func_name = abs_func_name.split(".")[-1]
         func_path = ".".join(abs_func_name.split(".")[:-1])
         func_module = importlib.import_module(func_path)
 
         func = getattr(func_module, func_name)
 
-        use_pickle = task.get('pickle', False)
-        queue = task.get('queue', settings.DEFAULT_QUEUE)
+        queue = task.get("queue", settings.DEFAULT_QUEUE)
 
-        task_args = task.get('args', [])
-        args = WorkerTask._unpickle_args(task_args) if use_pickle else task_args
+        task_args = task.get("args", [])
+        args = task_args
 
-        kwargs = WorkerTask._unpickle_args(task['kwargs']) if use_pickle else task['kwargs']
+        kwargs = task["kwargs"]
 
-        max_retries = task.get('maxRetries', settings.DEFAULT_MAX_RETRIES)
-        retry = task.get('retry', 0)
-        retry_id = task.get('retryId')
+        max_retries = task.get("maxRetries", settings.DEFAULT_MAX_RETRIES)
+        retry = task.get("retry", 0)
+        retry_id = task.get("retryId")
 
-        return WorkerTask(id, group_id, queue, func, args, kwargs, max_retries, retry, retry_id, use_pickle)
-
-    @staticmethod
-    def _unpickle_args(args: str) -> dict:
-        return pickle.loads(base64.b64decode(args.encode('utf-8')))
+        return WorkerTask(
+            id,
+            group_id,
+            queue,
+            func,
+            args,
+            kwargs,
+            max_retries,
+            retry,
+            retry_id,
+        )

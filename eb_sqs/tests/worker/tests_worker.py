@@ -1,6 +1,5 @@
 from unittest import TestCase
-
-from mock import Mock
+from unittest.mock import Mock
 
 from eb_sqs import settings
 from eb_sqs.decorators import task
@@ -10,17 +9,17 @@ from eb_sqs.worker.worker_exceptions import MaxRetriesReachedException
 from eb_sqs.worker.worker_factory import WorkerFactory
 
 
-class TestException(Exception):
+class TestException(Exception):  # noqa: N818
     pass
 
 
 @task()
-def dummy_task(msg):
+def dummy_task(msg: str):
     return msg
 
 
 @task(max_retries=100)
-def retries_task(num_of_retries):
+def retries_task(num_of_retries: int):
     if retries_task.retry_num < num_of_retries:
         retries_task.retry(execute_inline=True)
 
@@ -31,7 +30,7 @@ def max_retries_task():
 
 
 @task(max_retries=100)
-def repeating_group_task(num_of_retries):
+def repeating_group_task(num_of_retries: int):
     if repeating_group_task.retry_num < num_of_retries:
         repeating_group_task.retry(execute_inline=True)
 
@@ -42,7 +41,7 @@ def exception_group_task():
 
 
 @task(max_retries=100)
-def exception_repeating_group_task(num_of_retries):
+def exception_repeating_group_task(num_of_retries: int):
     if exception_repeating_group_task.retry_num == num_of_retries:
         raise TestException()
     else:
@@ -73,7 +72,7 @@ class WorkerTest(TestCase):
 
         result = self.worker.execute(msg)
 
-        self.assertEqual(result, 'Hello World!')
+        self.assertEqual(result, "Hello World!")
 
     def test_worker_execution_dead_letter_queue(self):
         settings.DEAD_LETTER_MODE = True
@@ -85,17 +84,21 @@ class WorkerTest(TestCase):
         self.assertIsNone(result)
 
     def test_delay(self):
-        self.worker.delay(None, 'queue', dummy_task, [], {'msg': 'Hello World!'}, 5, False, 3, False)
+        self.worker.delay(
+            None, "queue", dummy_task, (), {"msg": "Hello World!"}, 5, 3, False
+        )
 
         self.queue_mock.add_message.assert_called_once()
         queue_delay = self.queue_mock.add_message.call_args[0][2]
         self.assertEqual(queue_delay, 3)
 
     def test_delay_inline(self):
-        result = self.worker.delay(None, 'queue', dummy_task, [], {'msg': 'Hello World!'}, 5, False, 0, True)
+        result = self.worker.delay(
+            None, "queue", dummy_task, (), {"msg": "Hello World!"}, 5, 0, True
+        )
 
         self.queue_mock.add_message.assert_not_called()
-        self.assertEqual(result, 'Hello World!')
+        self.assertEqual(result, "Hello World!")
 
     def test_retry_max_reached_execution(self):
         with self.assertRaises(MaxRetriesReachedException):

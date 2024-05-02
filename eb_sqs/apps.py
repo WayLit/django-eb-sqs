@@ -1,7 +1,5 @@
-from __future__ import absolute_import, unicode_literals
-
 from django.apps import AppConfig
 
 
 class EbSqsConfig(AppConfig):
-    name = 'eb_sqs'
+    name = "eb_sqs"

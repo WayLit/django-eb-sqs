@@ -5,19 +5,24 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from eb_sqs import settings
-from eb_sqs.worker.queue_client import QueueClient, QueueDoesNotExistException, QueueClientException
+from eb_sqs.worker.queue_client import (
+    QueueClient,
+    QueueClientException,
+    QueueDoesNotExistException,
+)
 
 
 class SqsQueueClient(QueueClient):
-    def __init__(self):
-        self.sqs = boto3.resource('sqs',
-                                  region_name=settings.AWS_REGION,
-                                  config=Config(retries={'max_attempts': settings.AWS_MAX_RETRIES})
-                                  )
+    def __init__(self) -> None:
+        self.sqs = boto3.resource(
+            "sqs",
+            region_name=settings.AWS_REGION,
+            config=Config(retries={"max_attempts": settings.AWS_MAX_RETRIES}),
+        )
         self.queue_cache = {}
 
     def _get_queue(self, queue_name: str, use_cache: bool = True) -> Any:
-        full_queue_name = '{}{}'.format(settings.QUEUE_PREFIX, queue_name)
+        full_queue_name = f"{settings.QUEUE_PREFIX}{queue_name}"
 
         queue = self._get_sqs_queue(full_queue_name, use_cache)
         if not queue:
@@ -34,8 +39,8 @@ class SqsQueueClient(QueueClient):
             self.queue_cache[queue_name] = queue
             return queue
         except ClientError as ex:
-            error_code = ex.response.get('Error', {}).get('Code', None)
-            if error_code == 'AWS.SimpleQueueService.NonExistentQueue':
+            error_code = ex.response.get("Error", {}).get("Code", None)
+            if error_code == "AWS.SimpleQueueService.NonExistentQueue":
                 return None
             else:
                 raise ex
@@ -45,33 +50,30 @@ class SqsQueueClient(QueueClient):
             queue = self.sqs.create_queue(
                 QueueName=queue_name,
                 Attributes={
-                    'MessageRetentionPeriod': settings.QUEUE_MESSAGE_RETENTION,
-                    'VisibilityTimeout': settings.QUEUE_VISIBILITY_TIMEOUT
-                }
+                    "MessageRetentionPeriod": settings.QUEUE_MESSAGE_RETENTION,
+                    "VisibilityTimeout": settings.QUEUE_VISIBILITY_TIMEOUT,
+                },
             )
             self.queue_cache[queue_name] = queue
             return queue
         else:
             raise QueueDoesNotExistException(queue_name)
 
-    def add_message(self, queue_name: str, msg: str, delay: int):
+    def add_message(self, queue_name: str, msg: str, delay: int) -> None:
         try:
             queue = self._get_queue(queue_name)
             try:
-                queue.send_message(
-                    MessageBody=msg,
-                    DelaySeconds=delay
-                )
+                queue.send_message(MessageBody=msg, DelaySeconds=delay)
             except ClientError as ex:
-                if ex.response.get('Error', {}).get('Code', None) == 'AWS.SimpleQueueService.NonExistentQueue':
+                if (
+                    ex.response.get("Error", {}).get("Code", None)
+                    == "AWS.SimpleQueueService.NonExistentQueue"
+                ):
                     queue = self._get_queue(queue_name, use_cache=False)
-                    queue.send_message(
-                        MessageBody=msg,
-                        DelaySeconds=delay
-                    )
+                    queue.send_message(MessageBody=msg, DelaySeconds=delay)
                 else:
                     raise ex
         except QueueDoesNotExistException:
             raise
         except Exception as ex:
-            raise QueueClientException(ex)
+            raise QueueClientException(ex) from ex
